@@ -16,9 +16,6 @@ public class MainViewModel : ObservableObject
     private bool _wholeWordOnly;
     public bool WholeWordOnly { get => _wholeWordOnly; set { if (SetProperty(ref _wholeWordOnly, value)) SaveSettings(); } }
 
-    private bool _ignoreCase = true;
-    public bool IgnoreCase { get => _ignoreCase; set { if (SetProperty(ref _ignoreCase, value)) SaveSettings(); } }
-
     private string _status = "Ready";
     public string Status { get => _status; set => SetProperty(ref _status, value); }
 
@@ -51,6 +48,7 @@ public class MainViewModel : ObservableObject
     public ICommand RemoveKeywordCommand { get; }
     public ICommand OpenRecordCommand { get; }
     public ICommand DeleteRecordCommand { get; }
+    public ICommand ReconvertRecordCommand { get; }
     public ICommand ClearLogsCommand { get; }
     public ICommand CopyOriginalPathCommand { get; }
     public ICommand CopyOutputPathCommand { get; }
@@ -63,12 +61,11 @@ public class MainViewModel : ObservableObject
         _settings = Services.SettingsService.Load();
 
         foreach (var k in _settings.Keywords)
-            Keywords.Add(new KeywordRuleViewModel(k.Keyword, k.ColorHex) { Scope = k.Scope });
+            Keywords.Add(new KeywordRuleViewModel(k.Keyword, k.ColorHex) { Scope = k.Scope, IgnoreCase = k.IgnoreCase });
         foreach (var r in _settings.Records.OrderByDescending(r => r.ConvertedAt))
             Records.Add(r);
 
         _wholeWordOnly = _settings.WholeWordOnly;
-        _ignoreCase = _settings.IgnoreCase;
         _backgroundColor = _settings.BackgroundColor;
         _defaultTextColor = _settings.DefaultTextColor;
 
@@ -83,9 +80,16 @@ public class MainViewModel : ObservableObject
         });
         OpenRecordCommand = new RelayCommand(obj =>
         {
-            if (obj is ConversionRecord rec && File.Exists(rec.OutputPath))
+            if (obj is ConversionRecord rec)
             {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(rec.OutputPath) { UseShellExecute = true });
+                if (File.Exists(rec.OutputPath))
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(rec.OutputPath) { UseShellExecute = true });
+                }
+                else
+                {
+                    AddLog($"[{DateTime.Now:HH:mm:ss}] ERROR: File not exist");
+                }
             }
         });
         DeleteRecordCommand = new RelayCommand(obj =>
@@ -97,12 +101,42 @@ public class MainViewModel : ObservableObject
                 SaveSettings();
             }
         });
+        ReconvertRecordCommand = new RelayCommand(async obj =>
+        {
+            if (obj is ConversionRecord rec && File.Exists(rec.OriginalPath))
+            {
+                try
+                {
+                    Status = "Converting...";
+                    var newRec = await Services.ConverterService.ConvertAsync(
+                        rec.OriginalPath,
+                        Path.GetDirectoryName(rec.OriginalPath)!,
+                        Keywords.Select(k => new KeywordRule { Keyword = k.Keyword, ColorHex = k.ColorHex, Scope = k.Scope, IgnoreCase = k.IgnoreCase }).ToList(),
+                        WholeWordOnly);
+
+                    // Update the existing record in-place instead of adding a new one
+                    rec.OutputPath = newRec.OutputPath;
+                    rec.ConvertedAt = newRec.ConvertedAt;
+
+                    SaveSettings();
+                    Status = $"Converted to {newRec.OutputPath}";
+                }
+                catch (Exception ex)
+                {
+                    Status = "Conversion failed";
+                    AddLog($"[{DateTime.Now:HH:mm:ss}] ERROR: {ex.Message}");
+                }
+            }
+        });
         ClearLogsCommand = new RelayCommand(_ => Logs.Clear());
         CopyOriginalPathCommand = new RelayCommand(obj =>
         {
-            if (obj is ConversionRecord rec && !string.IsNullOrEmpty(rec.OriginalPath))
+            if (obj is ConversionRecord rec)
             {
-                try { System.Windows.Clipboard.SetText(rec.OriginalPath); } catch { }
+                if (!string.IsNullOrEmpty(rec.OriginalPath))
+                {
+                    try { System.Windows.Clipboard.SetText(rec.OriginalPath); } catch { }
+                }
             }
         });
         CopyOutputPathCommand = new RelayCommand(obj =>
@@ -146,10 +180,9 @@ public class MainViewModel : ObservableObject
 
     public void SaveSettings()
     {
-        _settings.Keywords = Keywords.Select(k => new Models.KeywordRule { Keyword = k.Keyword, ColorHex = k.ColorHex, Scope = k.Scope }).ToList();
+        _settings.Keywords = Keywords.Select(k => new Models.KeywordRule { Keyword = k.Keyword, ColorHex = k.ColorHex, Scope = k.Scope, IgnoreCase = k.IgnoreCase }).ToList();
         _settings.Records = Records.ToList();
         _settings.WholeWordOnly = WholeWordOnly;
-        _settings.IgnoreCase = IgnoreCase;
         _settings.BackgroundColor = BackgroundColor;
         _settings.DefaultTextColor = DefaultTextColor;
         Services.SettingsService.Save(_settings);

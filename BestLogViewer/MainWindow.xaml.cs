@@ -46,11 +46,11 @@ namespace BestLogViewer
                     inputPath,
                     Path.GetDirectoryName(inputPath)!, // output same folder as input
                     VM.Keywords.Select(k => new Models.KeywordRule { Keyword = k.Keyword, ColorHex = k.ColorHex, Scope = k.Scope }).ToList(),
-                    VM.WholeWordOnly,
-                    VM.IgnoreCase);
+                    VM.WholeWordOnly);
                 VM.Records.Insert(0, record);
                 VM.SaveSettings();
                 VM.Status = $"Converted to {record.OutputPath}";
+                VM.AddLog($"[{DateTime.Now:HH:mm:ss}] Convert successfully");
             }
             catch (Exception ex)
             {

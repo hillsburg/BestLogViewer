@@ -6,8 +6,9 @@
     xmlns:m="clr-namespace:BestLogViewer.Models"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:vm="clr-namespace:BestLogViewer.ViewModels"
+    x:Name="Root"
     Title="Best Log Viewer"
-    Width="1200"
+    Width="1300"
     Height="900"
     MinWidth="1000"
     MinHeight="800"
@@ -73,10 +74,6 @@
                                     Margin="16,0,0,0"
                                     Content="Whole word only"
                                     IsChecked="{Binding WholeWordOnly}" />
-                                <CheckBox
-                                    Margin="8,0,0,0"
-                                    Content="Ignore case"
-                                    IsChecked="{Binding IgnoreCase}" />
                             </StackPanel>
                         </StackPanel>
 
@@ -88,11 +85,11 @@
                             SelectedItem="{Binding SelectedKeyword}">
                             <DataGrid.Columns>
                                 <DataGridTextColumn
-                                    Width="*"
+                                    Width="Auto"
                                     Binding="{Binding Keyword, UpdateSourceTrigger=PropertyChanged}"
                                     Header="Keyword" />
                                 <DataGridTextColumn
-                                    Width="*"
+                                    Width="Auto"
                                     Binding="{Binding ColorHex, UpdateSourceTrigger=PropertyChanged}"
                                     Header="Color (#RRGGBB)" />
                                 <!--  New: per-keyword scope selector  -->
@@ -101,6 +98,11 @@
                                     Header="Scope"
                                     ItemsSource="{x:Static m:HighlightScopeValues.All}"
                                     SelectedItemBinding="{Binding Scope, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <!--  New: per-keyword ignore-case toggle  -->
+                                <DataGridCheckBoxColumn
+                                    Width="Auto"
+                                    Binding="{Binding IgnoreCase, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                    Header="Ignore case" />
                                 <DataGridTemplateColumn Width="100" Header="Preview">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
@@ -114,13 +116,16 @@
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                <DataGridTemplateColumn Width="Auto" Header="Actions">
+                                <DataGridTemplateColumn
+                                    Width="Auto"
+                                    MinWidth="80"
+                                    Header="Actions">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <Button
                                                 Command="{Binding DataContext.RemoveKeywordCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                 CommandParameter="{Binding}"
-                                                Content="Remove" />
+                                                Content="X" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
@@ -246,60 +251,78 @@
                         <ItemsControl ItemsSource="{Binding Records}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border BorderBrush="Gray" BorderThickness="0.5">
+                                    <Border
+                                        Margin="1,1,1,1"
+                                        BorderBrush="Gray"
+                                        BorderThickness="0.5"
+                                        CornerRadius="3">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="0.6*" />
+                                                <ColumnDefinition Width="0.8*" />
                                             </Grid.ColumnDefinitions>
                                             <TextBlock
                                                 Grid.Column="0"
                                                 Width="200"
-                                                Text="{Binding OutputPath}"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"
+                                                Text="{Binding OutputFileName}"
                                                 TextTrimming="CharacterEllipsis"
                                                 ToolTip="{Binding OutputPath}" />
                                             <TextBlock
                                                 Grid.Column="1"
                                                 Width="150"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"
                                                 Foreground="Gray"
                                                 Text="{Binding ConvertedAt}" />
-                                            <DockPanel
-                                                Grid.Column="2"
-                                                Margin="0,2"
-                                                LastChildFill="True">
-                                                <StackPanel
-                                                    Margin="8,0,0,0"
-                                                    DockPanel.Dock="Right"
-                                                    Orientation="Horizontal">
-                                                    <Button
-                                                        Margin="0,0,4,0"
-                                                        Command="{Binding DataContext.OpenRecordCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                        CommandParameter="{Binding}"
-                                                        Content="Open" />
-                                                    <Button
-                                                        Command="{Binding DataContext.DeleteRecordCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                        CommandParameter="{Binding}"
-                                                        Content="Delete" />
-                                                </StackPanel>
-                                            </DockPanel>
+                                            <Grid Grid.Column="2" Margin="0,2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="0.5*" />
+                                                </Grid.ColumnDefinitions>
+                                                <Button
+                                                    Grid.Column="0"
+                                                    Margin="0,0,4,0"
+                                                    Command="{Binding DataContext.OpenRecordCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}"
+                                                    Content="Open" />
+                                                <Button
+                                                    Grid.Column="2"
+                                                    Command="{Binding DataContext.DeleteRecordCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}"
+                                                    Content="X" />
+                                            </Grid>
                                         </Grid>
+                                        <Border.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem
+                                                    Command="{Binding DataContext.OpenRecordCommand, Source={x:Reference Root}}"
+                                                    CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                    Header="Open" />
+                                                <MenuItem
+                                                    Command="{Binding DataContext.ReconvertRecordCommand, Source={x:Reference Root}}"
+                                                    CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                    Header="Re-convert" />
+                                                <MenuItem
+                                                    Command="{Binding DataContext.DeleteRecordCommand, Source={x:Reference Root}}"
+                                                    CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                    Header="Delete" />
+                                                <Separator />
+                                                <MenuItem
+                                                    Command="{Binding DataContext.CopyOriginalPathCommand, Source={x:Reference Root}}"
+                                                    CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                    Header="Copy original path" />
+                                                <MenuItem
+                                                    Command="{Binding DataContext.CopyOutputPathCommand, Source={x:Reference Root}}"
+                                                    CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                    Header="Copy output path" />
+                                            </ContextMenu>
+                                        </Border.ContextMenu>
                                     </Border>
                                 </DataTemplate>
-
                             </ItemsControl.ItemTemplate>
-                            <ItemsControl.ContextMenu>
-                                <ContextMenu>
-                                    <MenuItem
-                                        Command="{Binding DataContext.CopyOriginalPathCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                        CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                        Header="Copy original path" />
-                                    <MenuItem
-                                        Command="{Binding DataContext.CopyOutputPathCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                        CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                        Header="Copy output path" />
-                                </ContextMenu>
-                            </ItemsControl.ContextMenu>
                         </ItemsControl>
                     </Grid>
                 </GroupBox>

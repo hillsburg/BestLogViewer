@@ -8,11 +8,14 @@ public class KeywordRuleViewModel : ObservableObject
     private string _keyword;
     private string _colorHex;
     private HighlightScope _scope = HighlightScope.Word;
+    private bool _ignoreCase = true;
 
     public string Keyword { get => _keyword; set { if (SetProperty(ref _keyword, value)) OnPropertyChanged(nameof(Brush)); } }
     public string ColorHex { get => _colorHex; set { if (SetProperty(ref _colorHex, value)) OnPropertyChanged(nameof(Brush)); } }
 
     public HighlightScope Scope { get => _scope; set => SetProperty(ref _scope, value); }
+
+    public bool IgnoreCase { get => _ignoreCase; set => SetProperty(ref _ignoreCase, value); }
 
     public SolidColorBrush Brush
     {

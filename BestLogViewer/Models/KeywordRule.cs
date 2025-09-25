@@ -17,4 +17,6 @@ public class KeywordRule
     // Expect formats like #RRGGBB or #AARRGGBB; we will normalize to #RRGGBB when used
     public string ColorHex { get; set; } = "#FF0000";
     public HighlightScope Scope { get; set; } = HighlightScope.Word;
+    // New: per-keyword case sensitivity
+    public bool IgnoreCase { get; set; } = true;
 }

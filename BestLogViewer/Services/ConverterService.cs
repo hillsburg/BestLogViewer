@@ -5,74 +5,46 @@ using BestLogViewer.Models;
 
 namespace BestLogViewer.Services;
 
-/// <summary>
-/// Converts a plain-text log file to an HTML file with color highlighting.
-/// - Supports two highlight scopes per keyword rule:
-///   - Word: only the matched keyword text is colored.
-///   - Line: if a keyword matches a line, the entire line is colored.
-/// - Honors global flags: wholeWord (word boundaries) and ignoreCase.
-/// </summary>
 public static class ConverterService
 {
     /// <summary>
-    /// Convert a log file to HTML, writing to outputDir/[name].html.
+    /// Convert a log file to HTML, writing to outputDir/[name]_[yyyyMMdd_HHmmss].html.
     /// The HTML uses a monospaced font and preserves whitespace.
     /// </summary>
     public static async Task<Models.ConversionRecord> ConvertAsync(
         string inputPath,
         string outputDir,
         List<KeywordRule> rules,
-        bool wholeWord,
-        bool ignoreCase)
+        bool wholeWord)
     {
         if (!File.Exists(inputPath)) throw new FileNotFoundException("Input not found", inputPath);
 
-        var outputFile = Path.Combine(outputDir, Path.GetFileNameWithoutExtension(inputPath) + ".html");
+        var baseName = Path.GetFileNameWithoutExtension(inputPath);
+        var stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        var outputFile = Path.Combine(outputDir, $"{baseName}_{stamp}.html");
 
         // Split rules into two buckets by scope. We will:
         // 1) Detect a line color (if any) using original text and the Line rules
         // 2) Apply word-level highlighting using the Word rules on the HTML-escaped text
-        var wordRules = new List<(string pattern, string color)>();
-        var lineRules = new List<(string pattern, string color)>();
+        var wordRules = new List<(Regex regex, string color)>();
+        var lineRules = new List<(Regex regex, string color)>();
         foreach (var r in rules)
         {
             if (string.IsNullOrWhiteSpace(r.Keyword)) continue;
-            // Escape the literal keyword so it can be used in a regex safely
             var escaped = Regex.Escape(r.Keyword);
-            // Apply word-boundaries if the "whole word" option is enabled
             var pattern = wholeWord ? $"\\b{escaped}\\b" : escaped;
             var color = NormalizeColor(r.ColorHex);
+            var options = RegexOptions.Compiled | (r.IgnoreCase ? RegexOptions.IgnoreCase : RegexOptions.None);
+            var rx = new Regex(pattern, options);
             if (r.Scope == HighlightScope.Line)
             {
-                lineRules.Add((pattern, color));
+                lineRules.Add((rx, color));
             }
             else
             {
-                wordRules.Add((pattern, color));
+                wordRules.Add((rx, color));
             }
         }
-
-        // Helper to build a single combined regex with capturing groups for each rule.
-        // We keep a map of group-index -> color so we can know which color to apply when a group matches.
-        (Regex? regex, Dictionary<int, string>? groupToColor) BuildCombined(List<(string pattern, string color)> items)
-        {
-            if (items.Count == 0) return (null, null);
-            var sb = new StringBuilder();
-            var map = new Dictionary<int, string>();
-            sb.Append('(').Append(items[0].pattern).Append(')');
-            map[1] = items[0].color;
-            for (int i = 1; i < items.Count; i++)
-            {
-                sb.Append("|(").Append(items[i].pattern).Append(')');
-                map[i + 1] = items[i].color;
-            }
-            var options = RegexOptions.Compiled;
-            if (ignoreCase) options |= RegexOptions.IgnoreCase;
-            return (new Regex(sb.ToString(), options), map);
-        }
-
-        var (wordRegex, wordMap) = BuildCombined(wordRules);
-        var (lineRegex, lineMap) = BuildCombined(lineRules);
 
         using var input = new StreamReader(inputPath, detectEncodingFromByteOrderMarks: true);
         using var output = new StreamWriter(outputFile, false, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
@@ -86,49 +58,24 @@ public static class ConverterService
         string? line;
         while ((line = await input.ReadLineAsync()) != null)
         {
-            // First pass: detect a line-level color using the raw (unescaped) text so regex indexes align with the source.
+            // Determine line color based on first matching line-scoped rule
             string? lineColor = null;
-            if (lineRegex != null && lineMap != null)
+            foreach (var (rx, color) in lineRules)
             {
-                var m = lineRegex.Match(line);
-                if (m.Success)
-                {
-                    // Pick the first successful group; this gives the color of the first matching rule.
-                    for (int g = 1; g < m.Groups.Count; g++)
-                    {
-                        if (m.Groups[g].Success) { lineColor = lineMap[g]; break; }
-                    }
-                }
+                if (rx.IsMatch(line)) { lineColor = color; break; }
             }
 
-            // Second pass: escape for HTML and then apply word-level highlighting with <span> wrappers.
-            // Order matters: escape first, then replace, to avoid corrupting HTML markup.
+            // Escape and apply word rules
             var escaped = HtmlEscape(line);
-            if (wordRegex != null && wordMap != null)
+            foreach (var (rx, color) in wordRules)
             {
-                escaped = wordRegex.Replace(escaped, m =>
-                {
-                    for (int g = 1; g < m.Groups.Count; g++)
-                    {
-                        if (m.Groups[g].Success)
-                        {
-                            var color = wordMap[g];
-                            return $"<span style=\"color:{color}\">{m.Value}</span>";
-                        }
-                    }
-                    return m.Value;
-                });
+                escaped = rx.Replace(escaped, m => $"<span style=\"color:{color}\">{m.Value}</span>");
             }
 
-            // Finally, write the line container. If a line color is present, apply it to the whole line.
             if (!string.IsNullOrEmpty(lineColor))
-            {
                 await output.WriteLineAsync($"<div class=\"l\" style=\"color:{lineColor}\">{escaped}</div>");
-            }
             else
-            {
                 await output.WriteLineAsync($"<div class=\"l\">{escaped}</div>");
-            }
         }
 
         await WriteHtmlFooterAsync(output);
