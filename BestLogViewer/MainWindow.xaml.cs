@@ -12,6 +12,13 @@ namespace BestLogViewer
         public MainWindow()
         {
             InitializeComponent();
+            this.Closing += MainWindow_Closing;
+        }
+
+        private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+        {
+            // Save all settings on close
+            VM.SaveSettings();
         }
 
         private async void Window_Drop(object sender, System.Windows.DragEventArgs e)

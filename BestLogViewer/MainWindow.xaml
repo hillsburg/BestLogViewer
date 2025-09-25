@@ -15,6 +15,7 @@
     AllowDrop="True"
     DragOver="Window_DragOver"
     Drop="Window_Drop"
+    Icon="/Assets/icon.png"
     mc:Ignorable="d">
     <Window.DataContext>
         <vm:MainViewModel />
@@ -35,7 +36,7 @@
                 <MenuItem Click="Exit_Click" Header="E_xit" />
             </MenuItem>
             <MenuItem Header="_Help">
-                <MenuItem Click="About_Click" Header="_About" />
+                <MenuItem Command="{Binding ShowAboutCommand}" Header="_About" />
             </MenuItem>
         </Menu>
 
@@ -65,6 +66,10 @@
                             DockPanel.Dock="Top"
                             Orientation="Vertical">
                             <StackPanel Margin="0,0,0,8" Orientation="Horizontal">
+                                <Button
+                                    Margin="0,0,8,0"
+                                    Command="{Binding SaveAllSettingsCommand}"
+                                    Content="Save Settings" />
                                 <Button
                                     Width="80"
                                     Margin="0,0,8,0"

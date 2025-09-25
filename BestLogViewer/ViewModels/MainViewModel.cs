@@ -14,16 +14,16 @@ public class MainViewModel : ObservableObject
     public ObservableCollection<string> Logs { get; } = new();
 
     private bool _wholeWordOnly;
-    public bool WholeWordOnly { get => _wholeWordOnly; set { if (SetProperty(ref _wholeWordOnly, value)) SaveSettings(); } }
+    public bool WholeWordOnly { get => _wholeWordOnly; set { SetProperty(ref _wholeWordOnly, value); OnPropertyChanged(nameof(WholeWordOnly)); } }
 
     private string _status = "Ready";
     public string Status { get => _status; set => SetProperty(ref _status, value); }
 
     private string _backgroundColor = "#111111";
-    public string BackgroundColor { get => _backgroundColor; set { if (SetProperty(ref _backgroundColor, value)) SaveSettings(); OnPropertyChanged(nameof(BackgroundBrush)); } }
+    public string BackgroundColor { get => _backgroundColor; set { if (SetProperty(ref _backgroundColor, value)) OnPropertyChanged(nameof(BackgroundBrush)); } }
 
     private string _defaultTextColor = "#DDDDDD";
-    public string DefaultTextColor { get => _defaultTextColor; set { if (SetProperty(ref _defaultTextColor, value)) SaveSettings(); OnPropertyChanged(nameof(DefaultTextBrush)); } }
+    public string DefaultTextColor { get => _defaultTextColor; set { if (SetProperty(ref _defaultTextColor, value)) OnPropertyChanged(nameof(DefaultTextBrush)); } }
 
     public System.Windows.Media.Brush BackgroundBrush => ToBrush(_backgroundColor);
     public System.Windows.Media.Brush DefaultTextBrush => ToBrush(_defaultTextColor);
@@ -45,6 +45,7 @@ public class MainViewModel : ObservableObject
     public KeywordRuleViewModel? SelectedKeyword { get => _selectedKeyword; set => SetProperty(ref _selectedKeyword, value); }
 
     public ICommand AddKeywordCommand { get; }
+    public ICommand ShowAboutCommand { get; }
     public ICommand RemoveKeywordCommand { get; }
     public ICommand OpenRecordCommand { get; }
     public ICommand DeleteRecordCommand { get; }
@@ -55,6 +56,7 @@ public class MainViewModel : ObservableObject
     public ICommand EditBackgroundColorCommand { get; }
     public ICommand EditDefaultTextColorCommand { get; }
     public ICommand EditKeywordColorCommand { get; }
+    public ICommand SaveAllSettingsCommand { get; }
 
     public MainViewModel()
     {
@@ -68,14 +70,13 @@ public class MainViewModel : ObservableObject
         _wholeWordOnly = _settings.WholeWordOnly;
         _backgroundColor = _settings.BackgroundColor;
         _defaultTextColor = _settings.DefaultTextColor;
-
+        ShowAboutCommand = new RelayCommand(obj => ShowAbout());
         AddKeywordCommand = new RelayCommand(_ => AddKeyword());
         RemoveKeywordCommand = new RelayCommand(obj =>
         {
             if (obj is KeywordRuleViewModel vm)
             {
                 Keywords.Remove(vm);
-                SaveSettings();
             }
         });
         OpenRecordCommand = new RelayCommand(obj =>
@@ -98,7 +99,6 @@ public class MainViewModel : ObservableObject
             {
                 try { if (File.Exists(rec.OutputPath)) File.Delete(rec.OutputPath); } catch { }
                 Records.Remove(rec);
-                SaveSettings();
             }
         });
         ReconvertRecordCommand = new RelayCommand(async obj =>
@@ -114,11 +114,9 @@ public class MainViewModel : ObservableObject
                         Keywords.Select(k => new KeywordRule { Keyword = k.Keyword, ColorHex = k.ColorHex, Scope = k.Scope, IgnoreCase = k.IgnoreCase }).ToList(),
                         WholeWordOnly);
 
-                    // Update the existing record in-place instead of adding a new one
                     rec.OutputPath = newRec.OutputPath;
                     rec.ConvertedAt = newRec.ConvertedAt;
 
-                    SaveSettings();
                     Status = $"Converted to {newRec.OutputPath}";
                 }
                 catch (Exception ex)
@@ -162,20 +160,22 @@ public class MainViewModel : ObservableObject
             {
                 var picked = Services.ColorPickerService.PickColor(vm.ColorHex);
                 if (!string.IsNullOrWhiteSpace(picked)) vm.ColorHex = picked!;
-                SaveSettings();
             }
         });
-
-        foreach (var vm in Keywords)
-            vm.PropertyChanged += (_, __) => SaveSettings();
+        SaveAllSettingsCommand = new RelayCommand(_ => SaveSettings());
     }
 
     private void AddKeyword()
     {
         var vm = new KeywordRuleViewModel("ERROR", "#FF0000");
-        vm.PropertyChanged += (_, __) => SaveSettings();
         Keywords.Add(vm);
-        SaveSettings();
+    }
+
+    private void ShowAbout()
+    {
+        About about = new About();
+        about.Owner = App.Current.MainWindow;
+        about.Show();
     }
 
     public void SaveSettings()
@@ -186,6 +186,7 @@ public class MainViewModel : ObservableObject
         _settings.BackgroundColor = BackgroundColor;
         _settings.DefaultTextColor = DefaultTextColor;
         Services.SettingsService.Save(_settings);
+        AddLog($"[{DateTime.Now:HH:mm:ss}] Settings saved");
     }
 
     public void AddLog(string message)
@@ -193,7 +194,6 @@ public class MainViewModel : ObservableObject
         Logs.Add(message);
         if (Logs.Count > 1000)
         {
-            // prevent unbounded growth
             while (Logs.Count > 800) Logs.RemoveAt(0);
         }
     }
